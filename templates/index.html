@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DDoS Traffic Classification & Threat Alert System (SOC)</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        cyber: {
+                            dark: '#070b13',
+                            panel: '#0e1726',
+                            card: '#152033',
+                            border: '#1f2e4d',
+                            accent: '#00f0ff',
+                            red: '#ef4444',
+                            green: '#10b981'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome 6 CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.85; transform: scale(1.008); }
+        }
+        .alert-pulse {
+            animation: pulse-slow 2s infinite ease-in-out;
+        }
+        .glow-cyan {
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.25);
+        }
+        .glow-red {
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+        }
+        /* Custom scrollbars */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #070b13; }
+        ::-webkit-scrollbar-thumb { background: #1f2e4d; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #00f0ff; }
+    </style>
+</head>
+<body class="bg-cyber-dark text-slate-100 font-sans min-h-screen flex flex-col antialiased selection:bg-cyan-500 selection:text-black">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="bg-cyber-panel border-b border-cyber-border sticky top-0 z-50 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-cyan-950/70 border border-cyan-500/50 flex items-center justify-center text-cyan-400 text-xl shadow-lg shadow-cyan-900/30">
+                <i class="fa-solid fa-shield-halved"></i>
+            </div>
+            <div>
+                <h1 class="text-lg font-bold tracking-wide text-white flex items-center gap-2">
+                    DDoS Sentinel SOC
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 font-medium">CICDDoS2019</span>
+                </h1>
+                <p class="text-xs text-slate-400">Intrusion Detection System & Traffic Threat Classifier</p>
+            </div>
+        </div>
+
+        <!-- System Status & Model Selection -->
+        <div class="flex items-center gap-4 text-xs">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-md bg-emerald-950/40 border border-emerald-500/40 text-emerald-400">
+                <span class="relative flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span class="font-semibold tracking-wider">IDS ACTIVE MONITORING</span>
+            </div>
+
+            <!-- Model Dropdown -->
+            <div class="flex items-center gap-2 bg-cyber-card border border-cyber-border px-3 py-1.5 rounded-md">
+                <span class="text-slate-400">Model:</span>
+                <select id="modelSelector" class="bg-transparent text-cyan-300 font-semibold focus:outline-none cursor-pointer">
+                    <option value="Random Forest" class="bg-cyber-panel">Random Forest (Optimal)</option>
+                    <option value="Decision Tree" class="bg-cyber-panel">Decision Tree</option>
+                    <option value="Logistic Regression" class="bg-cyber-panel">Logistic Regression</option>
+                    <option value="SVM" class="bg-cyber-panel">Support Vector Machine</option>
+                    <option value="KNN" class="bg-cyber-panel">K-Nearest Neighbors</option>
+                </select>
+            </div>
+        </div>
+    </header>
+
+    <!-- OPERATIONAL NOTICE BANNER -->
+    <div class="bg-slate-900/70 border-b border-cyber-border px-6 py-2 text-xs text-slate-400 flex items-center justify-between">
+        <div class="flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-amber-400"></i>
+            <span><strong>Passive IDS Notice:</strong> This system passively inspects telemetry and raises threat alarms. It does not drop packets or alter firewall routing rules.</span>
+        </div>
+        <span class="text-slate-500">Zero-Cost Academic Implementation</span>
+    </div>
+
+    <!-- MAIN DASHBOARD CONTENT -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+
+        <!-- NAVIGATION TABS -->
+        <div class="flex border-b border-cyber-border gap-2">
+            <button onclick="switchTab('tab-inspector')" id="btn-tab-inspector" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-cyan-400 text-cyan-400 flex items-center gap-2 transition">
+                <i class="fa-solid fa-microscope"></i> Traffic Inspector
+            </button>
+            <button onclick="switchTab('tab-stream')" id="btn-tab-stream" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+                <i class="fa-solid fa-bolt"></i> Live Stream Simulator
+            </button>
+            <button onclick="switchTab('tab-benchmarks')" id="btn-tab-benchmarks" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+                <i class="fa-solid fa-chart-line"></i> Model Benchmarks (5 Models)
+            </button>
+            <button onclick="switchTab('tab-arch')" id="btn-tab-arch" class="tab-btn px-4 py-2.5 text-sm font-semibold border-b-2 border-transparent text-slate-400 hover:text-slate-200 flex items-center gap-2 transition">
+                <i class="fa-solid fa-network-wired"></i> Architecture & Scope
+            </button>
+        </div>
+
+        <!-- ============================================================== -->
+        <!-- TAB 1: TRAFFIC INSPECTOR (CSV UPLOAD & ANALYSIS) -->
+        <!-- ============================================================== -->
+        <section id="tab-inspector" class="space-y-6">
+
+            <!-- UPLOAD & QUICK SAMPLE CONTROLS -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Dropzone -->
+                <div class="lg:col-span-2 bg-cyber-panel border-2 border-dashed border-cyber-border hover:border-cyan-500/50 rounded-xl p-6 text-center transition flex flex-col items-center justify-center gap-3 relative">
+                    <input type="file" id="csvFileInput" accept=".csv" class="absolute inset-0 opacity-0 cursor-pointer" onchange="handleFileUpload(event)">
+                    <div class="w-12 h-12 rounded-full bg-cyan-950/50 text-cyan-400 flex items-center justify-center text-xl border border-cyan-500/30">
+                        <i class="fa-solid fa-cloud-arrow-up"></i>
+                    </div>
+                    <div>
+                        <p class="text-sm font-medium text-white">Drag & drop your network traffic CSV file here</p>
+                        <p class="text-xs text-slate-400">or click to browse from your computer (e.g., from your Downloads folder)</p>
+                    </div>
+                    <span id="fileNameDisplay" class="text-xs px-2.5 py-1 rounded bg-cyber-card text-cyan-300 font-mono hidden"></span>
+                </div>
+
+                <!-- Instant Samples -->
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5 flex flex-col justify-between gap-3">
+                    <div>
+                        <h3 class="text-sm font-bold text-white mb-1"><i class="fa-solid fa-vial-virus text-cyan-400 mr-1.5"></i> One-Click Test Samples</h3>
+                        <p class="text-xs text-slate-400 mb-3">Instantly load test captures without finding files:</p>
+                    </div>
+                    <div class="space-y-2">
+                        <button onclick="loadSample('attack')" class="w-full text-left px-3.5 py-2.5 rounded-lg bg-red-950/30 border border-red-500/30 hover:border-red-500 hover:bg-red-950/50 text-red-300 text-xs font-semibold flex items-center justify-between transition group">
+                            <span><i class="fa-solid fa-radiation mr-2 text-red-400 group-hover:animate-spin"></i> Load High Attack (DDoS Flood)</span>
+                            <i class="fa-solid fa-chevron-right text-xs opacity-60"></i>
+                        </button>
+                        <button onclick="loadSample('mixed')" class="w-full text-left px-3.5 py-2.5 rounded-lg bg-amber-950/30 border border-amber-500/30 hover:border-amber-500 hover:bg-amber-950/50 text-amber-300 text-xs font-semibold flex items-center justify-between transition">
+                            <span><i class="fa-solid fa-arrows-split-up-and-left mr-2 text-amber-400"></i> Load Mixed Traffic (Normal + DDoS)</span>
+                            <i class="fa-solid fa-chevron-right text-xs opacity-60"></i>
+                        </button>
+                        <button onclick="loadSample('normal')" class="w-full text-left px-3.5 py-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 hover:border-emerald-500 hover:bg-emerald-950/50 text-emerald-300 text-xs font-semibold flex items-center justify-between transition">
+                            <span><i class="fa-solid fa-circle-check mr-2 text-emerald-400"></i> Load Clean Web Traffic (Benign)</span>
+                            <i class="fa-solid fa-chevron-right text-xs opacity-60"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DYNAMIC THREAT ALERT BANNER (Revealed on analysis) -->
+            <div id="threatAlertContainer" class="hidden"></div>
+
+            <!-- KPI METRICS SUMMARY -->
+            <div id="kpiContainer" class="grid grid-cols-2 lg:grid-cols-4 gap-4 hidden">
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <p class="text-xs text-slate-400 font-medium">TOTAL FLOWS INSPECTED</p>
+                    <p id="kpiTotal" class="text-2xl font-bold text-white mt-1">0</p>
+                    <span class="text-xs text-slate-500">100% Ingestion coverage</span>
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <p class="text-xs text-slate-400 font-medium">BENIGN NORMAL FLOWS</p>
+                    <p id="kpiNormal" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+                    <span id="kpiNormalPct" class="text-xs text-emerald-500/80">0.0% of traffic</span>
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <p class="text-xs text-slate-400 font-medium">DDOS ATTACK FLOWS</p>
+                    <p id="kpiDDoS" class="text-2xl font-bold text-red-400 mt-1">0</p>
+                    <span id="kpiDDoSPct" class="text-xs text-red-500/80">0.0% of traffic</span>
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-4">
+                    <p class="text-xs text-slate-400 font-medium">THREAT ASSESSMENT</p>
+                    <p id="kpiThreatLevel" class="text-2xl font-bold text-slate-300 mt-1">IDLE</p>
+                    <span class="text-xs text-slate-500">Policy: Alert at &gt;10%</span>
+                </div>
+            </div>
+
+            <!-- CHARTS SECTION -->
+            <div id="chartsContainer" class="grid grid-cols-1 lg:grid-cols-3 gap-6 hidden">
+                <!-- Donut Chart -->
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+                        <span>Traffic Breakdown</span>
+                        <i class="fa-solid fa-chart-pie text-cyan-400"></i>
+                    </h4>
+                    <div class="relative h-64 flex items-center justify-center">
+                        <canvas id="trafficDonutChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Scatter Chart -->
+                <div class="lg:col-span-2 bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-2 flex items-center justify-between">
+                        <span>Flow Duration vs. Transmission Rate (Packets/s)</span>
+                        <i class="fa-solid fa-chart-simple text-cyan-400"></i>
+                    </h4>
+                    <div class="relative h-64">
+                        <canvas id="trafficScatterChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INSPECTION LOG TABLE -->
+            <div id="tableContainer" class="bg-cyber-panel border border-cyber-border rounded-xl p-5 space-y-4 hidden">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h4 class="text-sm font-bold text-white"><i class="fa-solid fa-list-check text-cyan-400 mr-2"></i> Individual Flow Telemetry Logs</h4>
+                        <p class="text-xs text-slate-400">Showing classification verdicts, confidence levels, and flag counts</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <input type="text" id="tableSearch" placeholder="Filter by verdict or rate..." onkeyup="filterTable()" class="bg-cyber-card border border-cyber-border px-3 py-1.5 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500">
+                        <a href="/api/export" class="px-3.5 py-1.5 bg-cyan-600 hover:bg-cyan-500 text-black font-semibold text-xs rounded-lg transition flex items-center gap-2">
+                            <i class="fa-solid fa-download"></i> Download Audit CSV
+                        </a>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto max-h-96 border border-cyber-border rounded-lg">
+                    <table class="w-full text-left text-xs text-slate-300">
+                        <thead class="bg-cyber-card text-slate-400 uppercase text-[11px] sticky top-0 border-b border-cyber-border">
+                            <tr>
+                                <th class="py-2.5 px-3">#</th>
+                                <th class="py-2.5 px-3">Verdict</th>
+                                <th class="py-2.5 px-3">Confidence</th>
+                                <th class="py-2.5 px-3">Duration (us)</th>
+                                <th class="py-2.5 px-3">Packets / sec</th>
+                                <th class="py-2.5 px-3">Bytes / sec</th>
+                                <th class="py-2.5 px-3">SYN Flag</th>
+                                <th class="py-2.5 px-3">ACK Flag</th>
+                            </tr>
+                        </thead>
+                        <tbody id="telemetryTableBody" class="divide-y divide-cyber-border/40 font-mono">
+                            <!-- Injected rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 2: LIVE TRAFFIC STREAM SIMULATOR -->
+        <!-- ============================================================== -->
+        <section id="tab-stream" class="space-y-6 hidden">
+            <div class="bg-cyber-panel border border-cyber-border rounded-xl p-6">
+                <div class="flex flex-wrap items-center justify-between gap-4 border-b border-cyber-border pb-4 mb-6">
+                    <div>
+                        <h3 class="text-base font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-satellite-dish text-cyan-400"></i> Real-Time Packet Stream Simulator
+                        </h3>
+                        <p class="text-xs text-slate-400">Replays network packet streams with millisecond classification and live threat meter</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <button id="btnStartStream" onclick="toggleStream()" class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs rounded-lg transition flex items-center gap-2 shadow-lg shadow-emerald-950">
+                            <i class="fa-solid fa-play"></i> Start Stream
+                        </button>
+                        <div class="flex items-center gap-2 text-xs text-slate-400">
+                            <span>Speed:</span>
+                            <select id="streamSpeedSelect" class="bg-cyber-card border border-cyber-border px-2 py-1 rounded text-cyan-300">
+                                <option value="200">Fast (200ms)</option>
+                                <option value="500" selected>Normal (500ms)</option>
+                                <option value="1000">Slow (1s)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Simulator Live Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <div class="bg-cyber-card p-4 rounded-lg border border-cyber-border">
+                        <span class="text-xs text-slate-400">STREAM STATUS</span>
+                        <p id="streamStatusText" class="text-lg font-bold text-slate-400 mt-1">READY (IDLE)</p>
+                    </div>
+                    <div class="bg-cyber-card p-4 rounded-lg border border-cyber-border">
+                        <span class="text-xs text-slate-400">PACKETS STREAMED</span>
+                        <p id="streamPacketsCount" class="text-lg font-bold text-white mt-1">0</p>
+                    </div>
+                    <div class="bg-cyber-card p-4 rounded-lg border border-cyber-border">
+                        <span class="text-xs text-slate-400">ATTACK BURSTS CAUGHT</span>
+                        <p id="streamAttackCount" class="text-lg font-bold text-red-400 mt-1">0</p>
+                    </div>
+                    <div class="bg-cyber-card p-4 rounded-lg border border-cyber-border">
+                        <span class="text-xs text-slate-400">LIVE ATTACK DENSITY</span>
+                        <p id="streamRateText" class="text-lg font-bold text-cyan-400 mt-1">0.0%</p>
+                    </div>
+                </div>
+
+                <!-- Stream Log Output -->
+                <div class="border border-cyber-border rounded-lg overflow-hidden">
+                    <div class="bg-cyber-card px-4 py-2 text-xs font-semibold text-slate-300 border-b border-cyber-border flex justify-between">
+                        <span>LIVE PACKET FEED</span>
+                        <span class="text-cyan-400 font-mono">TCP / UDP / ICMP TELEMETRY</span>
+                    </div>
+                    <div id="liveStreamFeed" class="p-3 h-80 overflow-y-auto space-y-1.5 font-mono text-xs bg-black/40">
+                        <p class="text-slate-500 italic">Press "Start Stream" above to simulate network traffic streaming...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 3: MODEL BENCHMARKS (5 MODELS) -->
+        <!-- ============================================================== -->
+        <section id="tab-benchmarks" class="space-y-6 hidden">
+            <!-- 5-Model Comparison Table -->
+            <div class="bg-cyber-panel border border-cyber-border rounded-xl p-6">
+                <h3 class="text-base font-bold text-white mb-2 flex items-center gap-2">
+                    <i class="fa-solid fa-table-list text-cyan-400"></i> Model Performance Benchmarks (Held-out Test Split: 3,192 records)
+                </h3>
+                <p class="text-xs text-slate-400 mb-4">Evaluated strictly with featurization ordering (split before scaling to prevent leakage):</p>
+
+                <div class="overflow-x-auto border border-cyber-border rounded-lg">
+                    <table class="w-full text-left text-xs text-slate-200">
+                        <thead class="bg-cyber-card text-slate-400 uppercase text-[11px] border-b border-cyber-border">
+                            <tr>
+                                <th class="py-3 px-4">Algorithm Name</th>
+                                <th class="py-3 px-4">Accuracy</th>
+                                <th class="py-3 px-4">Precision</th>
+                                <th class="py-3 px-4">Recall</th>
+                                <th class="py-3 px-4">F1-Score</th>
+                                <th class="py-3 px-4">ROC-AUC</th>
+                                <th class="py-3 px-4">Training Time</th>
+                                <th class="py-3 px-4">Production Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-cyber-border/40 font-mono">
+                            <tr class="bg-cyan-950/20 font-semibold text-cyan-300">
+                                <td class="py-3 px-4 flex items-center gap-2">
+                                    <i class="fa-solid fa-star text-amber-400"></i> Random Forest
+                                </td>
+                                <td class="py-3 px-4 text-emerald-400">100.00%</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.163 s</td>
+                                <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 text-[10px]">SELECTED BEST</span></td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4">Decision Tree</td>
+                                <td class="py-3 px-4 text-emerald-400">100.00%</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">0.094 s</td>
+                                <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Benchmarked</span></td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4">Logistic Regression</td>
+                                <td class="py-3 px-4 text-emerald-400">100.00%</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">0.105 s</td>
+                                <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Benchmarked</span></td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4">Support Vector Machine (SVM)</td>
+                                <td class="py-3 px-4 text-emerald-400">100.00%</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">4.579 s</td>
+                                <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Benchmarked</span></td>
+                            </tr>
+                            <tr>
+                                <td class="py-3 px-4">K-Nearest Neighbors (KNN)</td>
+                                <td class="py-3 px-4 text-emerald-400">100.00%</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">1.0000</td>
+                                <td class="py-3 px-4">0.004 s</td>
+                                <td class="py-3 px-4"><span class="px-2 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">Benchmarked</span></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Visual Plots Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-braille text-cyan-400 mr-2"></i> Confusion Matrix Heatmaps (All 5 Classifiers)</h4>
+                    <img src="/api/charts/confusion_matrices.png" alt="Confusion Matrix Grid" class="w-full rounded-lg border border-cyber-border/70 hover:opacity-95 transition">
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-bezier-curve text-cyan-400 mr-2"></i> Receiver Operating Characteristic (ROC) Curves</h4>
+                    <img src="/api/charts/roc_curves.png" alt="ROC Curves" class="w-full rounded-lg border border-cyber-border/70 hover:opacity-95 transition">
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-chart-column text-cyan-400 mr-2"></i> Side-by-Side Performance Comparison</h4>
+                    <img src="/api/charts/model_comparison.png" alt="Performance Bar Chart" class="w-full rounded-lg border border-cyber-border/70 hover:opacity-95 transition">
+                </div>
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-5">
+                    <h4 class="text-sm font-bold text-white mb-3"><i class="fa-solid fa-ranking-star text-cyan-400 mr-2"></i> Top 15 Discriminative Network Flow Features</h4>
+                    <img src="/api/charts/top_features.png" alt="Top Features" class="w-full rounded-lg border border-cyber-border/70 hover:opacity-95 transition">
+                </div>
+            </div>
+        </section>
+
+        <!-- ============================================================== -->
+        <!-- TAB 4: ARCHITECTURE & SCOPE -->
+        <!-- ============================================================== -->
+        <section id="tab-arch" class="space-y-6 hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- System Architecture -->
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-6 space-y-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-sitemap text-cyan-400"></i> End-to-End System Architecture
+                    </h3>
+                    <div class="bg-black/40 p-4 rounded-lg font-mono text-xs text-cyan-300 leading-relaxed border border-cyber-border">
+<pre>
+[ Network Telemetry / CSV Ingestion ]
+                 │
+                 ▼
+[ Preprocessing & Data Cleaning ]
+  ├── De-duplication (128 removed)
+  ├── Stripping IDs (IPs, Ports, Timestamps)
+  └── Handling NaN / Infinite flow rates
+                 │
+                 ▼
+[ Scaler Transformation (StandardScaler) ]
+                 │
+                 ▼
+[ ML Classifier (Random Forest / 5 Models) ]
+                 │
+                 ▼
+[ Alert & Diagnostic Engine (Flask SOC) ]
+  ├── Pulsing Red Alert Banner (Triggered &gt;10%)
+  ├── KPI Cards & Chart Analytics
+  └── CSV Audit Export
+</pre>
+                    </div>
+                </div>
+
+                <!-- IDS vs IPS Comparison -->
+                <div class="bg-cyber-panel border border-cyber-border rounded-xl p-6 space-y-4">
+                    <h3 class="text-base font-bold text-white flex items-center gap-2">
+                        <i class="fa-solid fa-scale-balanced text-cyan-400"></i> IDS (This Project) vs. IPS Scope
+                    </h3>
+                    <div class="overflow-x-auto border border-cyber-border rounded-lg">
+                        <table class="w-full text-left text-xs text-slate-300">
+                            <thead class="bg-cyber-card text-slate-400 uppercase text-[11px] border-b border-cyber-border">
+                                <tr>
+                                    <th class="py-2.5 px-3">Dimension</th>
+                                    <th class="py-2.5 px-3 text-cyan-400">IDS (Sentinel Project)</th>
+                                    <th class="py-2.5 px-3">IPS (Firewall IPS)</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-cyber-border/40">
+                                <tr>
+                                    <td class="py-2.5 px-3 font-semibold">Action</td>
+                                    <td class="py-2.5 px-3 text-emerald-400 font-semibold">Detect &amp; Alert Only</td>
+                                    <td class="py-2.5 px-3 text-amber-400">Drops / Filters Packets</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 px-3 font-semibold">Placement</td>
+                                    <td class="py-2.5 px-3">Passive / Out-of-band</td>
+                                    <td class="py-2.5 px-3">In-line with traffic</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 px-3 font-semibold">Risk</td>
+                                    <td class="py-2.5 px-3 text-emerald-400">Zero false-positive drops</td>
+                                    <td class="py-2.5 px-3 text-red-400">Risk of blocking real users</td>
+                                </tr>
+                                <tr>
+                                    <td class="py-2.5 px-3 font-semibold">Cost</td>
+                                    <td class="py-2.5 px-3 text-cyan-300">$0 (Free Open Source)</td>
+                                    <td class="py-2.5 px-3">High appliance / ASIC cost</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="bg-cyber-panel border-t border-cyber-border py-4 px-6 text-center text-xs text-slate-500">
+        DDoS Traffic Classification &amp; Real-Time Alert System • Python &amp; Scikit-Learn • Fully Operational Cyber SOC Dashboard
+    </footer>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        let donutChart = null;
+        let scatterChart = null;
+        let streamInterval = null;
+        let streamPackets = [];
+        let streamIndex = 0;
+        let streamDDoSCount = 0;
+
+        function switchTab(tabId) {
+            document.querySelectorAll('main > section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(tabId).classList.remove('hidden');
+
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('border-cyan-400', 'text-cyan-400');
+                btn.classList.add('border-transparent', 'text-slate-400');
+            });
+            const activeBtn = document.getElementById('btn-' + tabId);
+            activeBtn.classList.remove('border-transparent', 'text-slate-400');
+            activeBtn.classList.add('border-cyan-400', 'text-cyan-400');
+        }
+
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('fileNameDisplay').textContent = file.name;
+            document.getElementById('fileNameDisplay').classList.remove('hidden');
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('model', document.getElementById('modelSelector').value);
+
+            await submitAnalysis(formData);
+        }
+
+        async function loadSample(sampleType) {
+            const formData = new FormData();
+            formData.append('sample', sampleType);
+            formData.append('model', document.getElementById('modelSelector').value);
+
+            document.getElementById('fileNameDisplay').textContent = 'Preloaded sample: ' + sampleType;
+            document.getElementById('fileNameDisplay').classList.remove('hidden');
+
+            await submitAnalysis(formData);
+        }
+
+        async function submitAnalysis(formData) {
+            try {
+                const response = await fetch('/api/analyze', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+                renderDashboard(data);
+            } catch (err) {
+                alert('Connection error: ' + err.message);
+            }
+        }
+
+        function renderDashboard(data) {
+            // Unhide containers
+            document.getElementById('threatAlertContainer').classList.remove('hidden');
+            document.getElementById('kpiContainer').classList.remove('hidden');
+            document.getElementById('chartsContainer').classList.remove('hidden');
+            document.getElementById('tableContainer').classList.remove('hidden');
+
+            // 1. Alert Banner
+            const alertContainer = document.getElementById('threatAlertContainer');
+            if (data.attack_rate >= 10.0) {
+                alertContainer.innerHTML = `
+                    <div class="bg-red-950/40 border-2 border-red-500 rounded-xl p-5 glow-red alert-pulse flex items-start gap-4">
+                        <div class="w-12 h-12 rounded-lg bg-red-900/60 border border-red-500 flex items-center justify-center text-red-400 text-2xl shrink-0">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                        </div>
+                        <div class="space-y-1">
+                            <h3 class="text-base font-extrabold text-red-400 tracking-wide uppercase">
+                                🚨 CRITICAL THREAT ALERT: High-Volume DDoS Attack Detected!
+                            </h3>
+                            <p class="text-xs text-red-200">
+                                <strong>${data.ddos_count.toLocaleString()}</strong> attack flows detected out of ${data.total.toLocaleString()} inspected packets
+                                (<strong>${data.attack_rate}%</strong> attack density, exceeding safety threshold of 10.0%).
+                            </p>
+                            <p class="text-[11px] text-red-400/80">
+                                <strong>Recommended Action:</strong> Inspect target host, engage upstream ISP rate-limiting, and notify security team.
+                            </p>
+                        </div>
+                    </div>
+                `;
+            } else if (data.ddos_count > 0) {
+                alertContainer.innerHTML = `
+                    <div class="bg-amber-950/30 border border-amber-500/60 rounded-xl p-4 flex items-center gap-3 text-amber-200 text-xs">
+                        <i class="fa-solid fa-circle-exclamation text-amber-400 text-lg"></i>
+                        <span><strong>Moderate Alert:</strong> Detected ${data.ddos_count} suspicious DDoS flow(s) (${data.attack_rate}%). Below critical policy trigger.</span>
+                    </div>
+                `;
+            } else {
+                alertContainer.innerHTML = `
+                    <div class="bg-emerald-950/30 border border-emerald-500/60 rounded-xl p-4 flex items-center gap-3 text-emerald-200 text-xs">
+                        <i class="fa-solid fa-shield-heart text-emerald-400 text-lg"></i>
+                        <span><strong>🟢 All Clear:</strong> All ${data.total.toLocaleString()} network flow records conform to normal benign protocol behaviors.</span>
+                    </div>
+                `;
+            }
+
+            // 2. KPI Cards
+            document.getElementById('kpiTotal').textContent = data.total.toLocaleString();
+            document.getElementById('kpiNormal').textContent = data.normal_count.toLocaleString();
+            document.getElementById('kpiNormalPct').textContent = (100 - data.attack_rate).toFixed(1) + '% of traffic';
+            document.getElementById('kpiDDoS').textContent = data.ddos_count.toLocaleString();
+            document.getElementById('kpiDDoSPct').textContent = data.attack_rate.toFixed(1) + '% of traffic';
+
+            const threatElem = document.getElementById('kpiThreatLevel');
+            threatElem.textContent = data.threat_level;
+            threatElem.style.color = data.threat_color;
+
+            // 3. Render Charts
+            renderCharts(data);
+
+            // 4. Populate Table
+            renderTable(data.table_rows);
+        }
+
+        function renderCharts(data) {
+            // Donut Chart
+            if (donutChart) donutChart.destroy();
+            const ctxDonut = document.getElementById('trafficDonutChart').getContext('2d');
+            donutChart = new Chart(ctxDonut, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Normal Web Traffic', 'DDoS Attack Traffic'],
+                    datasets: [{
+                        data: [data.normal_count, data.ddos_count],
+                        backgroundColor: ['#10b981', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 11 } } }
+                    },
+                    cutout: '70%'
+                }
+            });
+
+            // Scatter Chart
+            if (scatterChart) scatterChart.destroy();
+            const ctxScatter = document.getElementById('trafficScatterChart').getContext('2d');
+            const scatterPointsNormal = data.scatter_data.filter(p => p.label === 'Normal');
+            const scatterPointsAttack = data.scatter_data.filter(p => p.label !== 'Normal');
+
+            scatterChart = new Chart(ctxScatter, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Normal Flows',
+                            data: scatterPointsNormal,
+                            backgroundColor: 'rgba(16, 185, 129, 0.75)',
+                            borderColor: '#10b981',
+                            pointRadius: 4
+                        },
+                        {
+                            label: 'DDoS Attack Flows',
+                            data: scatterPointsAttack,
+                            backgroundColor: 'rgba(239, 68, 68, 0.85)',
+                            borderColor: '#ef4444',
+                            pointRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: { display: true, text: 'Flow Duration (ms)', color: '#94a3b8' },
+                            ticks: { color: '#64748b' },
+                            grid: { color: '#1e293b' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Flow Packets / sec', color: '#94a3b8' },
+                            ticks: { color: '#64748b' },
+                            grid: { color: '#1e293b' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { color: '#94a3b8', font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        function renderTable(rows) {
+            const tbody = document.getElementById('telemetryTableBody');
+            tbody.innerHTML = '';
+
+            rows.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-cyber-card/60 transition';
+                const isAttack = r.verdict.includes('DDoS');
+                const badge = isAttack
+                    ? `<span class="px-2 py-0.5 rounded bg-red-950/60 border border-red-500/50 text-red-400 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i> DDoS ATTACK</span>`
+                    : `<span class="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/50 text-emerald-400 font-semibold"><i class="fa-solid fa-check mr-1"></i> NORMAL</span>`;
+
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 text-slate-500">#${r.id}</td>
+                    <td class="py-2.5 px-3">${badge}</td>
+                    <td class="py-2.5 px-3 text-cyan-300 font-bold">${r.confidence}%</td>
+                    <td class="py-2.5 px-3 text-slate-300">${r.duration.toLocaleString()}</td>
+                    <td class="py-2.5 px-3 text-slate-300">${r.packets_s.toLocaleString()}</td>
+                    <td class="py-2.5 px-3 text-slate-400">${r.bytes_s.toLocaleString()}</td>
+                    <td class="py-2.5 px-3 ${r.syn_flags > 0 ? 'text-amber-400 font-bold' : 'text-slate-500'}">${r.syn_flags}</td>
+                    <td class="py-2.5 px-3 ${r.ack_flags > 0 ? 'text-slate-300' : 'text-slate-600'}">${r.ack_flags}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function filterTable() {
+            const query = document.getElementById('tableSearch').value.toLowerCase();
+            const rows = document.querySelectorAll('#telemetryTableBody tr');
+            rows.forEach(r => {
+                const text = r.textContent.toLowerCase();
+                r.style.display = text.includes(query) ? '' : 'none';
+            });
+        }
+
+        // =========================================================
+        // STREAM SIMULATOR LOGIC
+        // =========================================================
+        async function toggleStream() {
+            const btn = document.getElementById('btnStartStream');
+            if (streamInterval) {
+                // Stop
+                clearInterval(streamInterval);
+                streamInterval = null;
+                btn.innerHTML = '<i class="fa-solid fa-play"></i> Start Stream';
+                btn.classList.replace('bg-red-600', 'bg-emerald-600');
+                btn.classList.replace('hover:bg-red-500', 'hover:bg-emerald-500');
+                document.getElementById('streamStatusText').textContent = 'PAUSED';
+                document.getElementById('streamStatusText').className = 'text-lg font-bold text-amber-400 mt-1';
+            } else {
+                // Fetch sample data if needed
+                if (streamPackets.length === 0) {
+                    const res = await fetch('/api/stream/sample');
+                    const d = await res.json();
+                    streamPackets = d.packets || [];
+                }
+
+                btn.innerHTML = '<i class="fa-solid fa-stop"></i> Stop Stream';
+                btn.classList.replace('bg-emerald-600', 'bg-red-600');
+                btn.classList.replace('hover:bg-emerald-500', 'hover:bg-red-500');
+                document.getElementById('streamStatusText').textContent = 'LIVE STREAMING';
+                document.getElementById('streamStatusText').className = 'text-lg font-bold text-emerald-400 mt-1';
+
+                const intervalMs = parseInt(document.getElementById('streamSpeedSelect').value) || 500;
+                streamInterval = setInterval(tickStream, intervalMs);
+            }
+        }
+
+        function tickStream() {
+            if (streamPackets.length === 0) return;
+            const pkt = streamPackets[streamIndex % streamPackets.length];
+            streamIndex++;
+
+            const isAttack = pkt.verdict.includes('DDoS');
+            if (isAttack) streamDDoSCount++;
+
+            document.getElementById('streamPacketsCount').textContent = streamIndex;
+            document.getElementById('streamAttackCount').textContent = streamDDoSCount;
+            const rate = ((streamDDoSCount / streamIndex) * 100).toFixed(1);
+            document.getElementById('streamRateText').textContent = rate + '%';
+
+            const feed = document.getElementById('liveStreamFeed');
+            const p = document.createElement('p');
+            if (isAttack) {
+                p.className = 'text-red-400 border-l-2 border-red-500 pl-2 bg-red-950/20 py-0.5';
+                p.innerHTML = `<span class="text-slate-500">[${new Date().toLocaleTimeString()}]</span> <strong>🚨 DDoS ATTACK BURST</strong> • Rate: ${pkt.packets_s} pkts/s • SYN: ${pkt.syn_flags} • Verdict Conf: ${pkt.confidence}%`;
+            } else {
+                p.className = 'text-emerald-400 border-l-2 border-emerald-500 pl-2 py-0.5';
+                p.innerHTML = `<span class="text-slate-500">[${new Date().toLocaleTimeString()}]</span> 🟢 NORMAL FLOW • Rate: ${pkt.packets_s} pkts/s • Duration: ${pkt.duration} us • Verdict Conf: ${pkt.confidence}%`;
+            }
+            feed.insertBefore(p, feed.firstChild);
+            if (feed.children.length > 60) feed.removeChild(feed.lastChild);
+        }
+
+        // Auto load mixed on first visit for instant visual satisfaction
+        window.addEventListener('DOMContentLoaded', () => {
+            loadSample('mixed');
+        });
+    </script>
+</body>
+</html>

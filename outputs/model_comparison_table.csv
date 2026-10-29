@@ -1,0 +1,6 @@
+Model,Accuracy,Precision,Recall,F1-Score,ROC-AUC,Training Time (s)
+Random Forest,0.9986,0.9991,0.9986,0.9988,1.0,2.103
+Decision Tree,0.9983,0.9991,0.9981,0.9986,0.9983,0.237
+Logistic Regression,0.996,0.9939,0.9995,0.9967,0.9996,0.285
+SVM,0.9957,0.9934,0.9995,0.9965,0.9997,7.869
+KNN,0.9957,0.9943,0.9986,0.9965,0.9985,0.004

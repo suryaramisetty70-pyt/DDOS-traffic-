@@ -1,0 +1,47 @@
+[
+    {
+        "Model": "Random Forest",
+        "Accuracy": 0.9986,
+        "Precision": 0.9991,
+        "Recall": 0.9986,
+        "F1-Score": 0.9988,
+        "ROC-AUC": 1.0,
+        "Training Time (s)": 2.103
+    },
+    {
+        "Model": "Decision Tree",
+        "Accuracy": 0.9983,
+        "Precision": 0.9991,
+        "Recall": 0.9981,
+        "F1-Score": 0.9986,
+        "ROC-AUC": 0.9983,
+        "Training Time (s)": 0.237
+    },
+    {
+        "Model": "Logistic Regression",
+        "Accuracy": 0.996,
+        "Precision": 0.9939,
+        "Recall": 0.9995,
+        "F1-Score": 0.9967,
+        "ROC-AUC": 0.9996,
+        "Training Time (s)": 0.285
+    },
+    {
+        "Model": "SVM",
+        "Accuracy": 0.9957,
+        "Precision": 0.9934,
+        "Recall": 0.9995,
+        "F1-Score": 0.9965,
+        "ROC-AUC": 0.9997,
+        "Training Time (s)": 7.869
+    },
+    {
+        "Model": "KNN",
+        "Accuracy": 0.9957,
+        "Precision": 0.9943,
+        "Recall": 0.9986,
+        "F1-Score": 0.9965,
+        "ROC-AUC": 0.9985,
+        "Training Time (s)": 0.004
+    }
+]
