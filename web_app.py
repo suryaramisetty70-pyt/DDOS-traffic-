@@ -220,8 +220,9 @@ def export():
     )
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
     print("\n" + "="*70)
     print("  [+] DDOS TRAFFIC CLASSIFIER & SOC DASHBOARD (FLASK SERVER) [+]")
-    print("  URL: http://localhost:5000")
+    print(f"  URL: http://0.0.0.0:{port}")
     print("="*70 + "\n")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    app.run(host="0.0.0.0", port=port, debug=False)
